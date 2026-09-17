@@ -1,0 +1,95 @@
+#--------------------------------------------------------------------
+# Example Environment Configuration file
+#
+# This file can be used as a starting point for your own
+# custom .env files, and contains most of the possible settings
+# available in a default install.
+#
+# By default, all of the settings are commented out. If you want
+# to override the setting, you must un-comment it by removing the '#'
+# at the beginning of the line.
+#--------------------------------------------------------------------
+
+#--------------------------------------------------------------------
+# ENVIRONMENT
+#--------------------------------------------------------------------
+
+# CI_ENVIRONMENT = production
+
+#--------------------------------------------------------------------
+# APP
+#--------------------------------------------------------------------
+
+# app.baseURL = ''
+# If you have trouble with `.`, you could also use `_`.
+# app_baseURL = ''
+# app.forceGlobalSecureRequests = false
+# app.CSPEnabled = false
+# securityHeaders.hstsEnabled = true
+# securityHeaders.hstsMaxAge = 31536000
+# securityHeaders.hstsIncludeSubDomains = false
+# securityHeaders.hstsPreload = false
+# Set true only when X-Forwarded-Proto is supplied by a trusted reverse proxy.
+# securityHeaders.trustForwardedProto = false
+
+#--------------------------------------------------------------------
+# DATABASE
+#--------------------------------------------------------------------
+
+# database.default.hostname = localhost
+# database.default.database = ci4
+# database.default.username = root
+# database.default.password = root
+# database.default.DBDriver = MySQLi
+# database.default.DBPrefix =
+# database.default.port = 3306
+
+# If you use MySQLi as tests, first update the values of Config\Database::$tests.
+# database.tests.hostname = localhost
+# database.tests.database = ci4_test
+# database.tests.username = root
+# database.tests.password = root
+# database.tests.DBDriver = MySQLi
+# database.tests.DBPrefix =
+# database.tests.charset = utf8mb4
+# database.tests.DBCollat = utf8mb4_general_ci
+# database.tests.port = 3306
+
+#--------------------------------------------------------------------
+# ENCRYPTION
+#--------------------------------------------------------------------
+
+# encryption.key =
+
+#--------------------------------------------------------------------
+# SESSION
+#--------------------------------------------------------------------
+
+# session.driver = 'CodeIgniter\Session\Handlers\FileHandler'
+# session.savePath = null
+
+#--------------------------------------------------------------------
+# LOGGER
+#--------------------------------------------------------------------
+
+# logger.threshold = 4
+
+#--------------------------------------------------------------------
+# OTP provider: internal or fazpass. Set fazpass only after gateway is tested.
+# OTP_PROVIDER = internal
+# FAZPASS_API_URL = https://api.fazpass.com
+# FAZPASS_API_PREFIX = /v1
+# FAZPASS_MERCHANT_KEY =
+# FAZPASS_GATEWAY_KEY =
+# FAZPASS_CALLBACK_SECRET =
+# FAZPASS_TIMEOUT_SECONDS = 15
+
+# OTP policy
+# OTP_TTL_SECONDS = 300
+# OTP_CHALLENGE_TTL_SECONDS = 900
+# OTP_RESEND_COOLDOWN_SECONDS = 60
+# OTP_REQUEST_WINDOW_SECONDS = 3600
+# OTP_MAX_REQUESTS_PER_PHONE = 5
+# OTP_MAX_REQUESTS_PER_IP = 20
+# OTP_MAX_VERIFICATION_ATTEMPTS = 5
+# OTP_CLEANUP_RETENTION_SECONDS = 86400

@@ -1,0 +1,180 @@
+@import "tailwindcss" source(none);
+@source "../../app/Views/signage/**/*.php";
+
+@plugin "daisyui" {
+    themes: light --default, dark --prefersdark;
+    logs: false;
+}
+
+[v-cloak] {
+    display: none;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    overflow: hidden;
+    cursor: none;
+    user-select: none;
+    font-family: "Inter", "Segoe UI", sans-serif;
+}
+
+#app {
+    display: grid;
+    width: 100vw;
+    height: 100vh;
+    grid-template-areas:
+        "header header"
+        "media info"
+        "ticker ticker";
+    grid-template-columns: 45% 55%;
+    grid-template-rows: auto 1fr auto;
+}
+
+#panel-header {
+    grid-area: header;
+    padding: 0.8vh 2.5vw;
+}
+
+#panel-media {
+    position: relative;
+    display: block;
+    grid-area: media;
+    overflow: hidden;
+    border-right: 1px solid var(--color-base-300);
+    background: var(--color-neutral);
+}
+
+[data-theme="light"] #panel-media {
+    background: var(--color-base-100);
+}
+
+#panel-media .media-bg,
+#panel-media .media-main {
+    width: 100%;
+    height: 100%;
+}
+
+#panel-media .media-bg {
+    position: absolute;
+    inset: -8%;
+    width: 116%;
+    height: 116%;
+    object-fit: cover;
+    filter: blur(24px) saturate(1.15) brightness(0.62);
+    transform: scale(1.04);
+    opacity: 0.82;
+    pointer-events: none;
+}
+
+[data-theme="light"] #panel-media .media-bg {
+    filter: blur(24px) saturate(0.82) brightness(1.38);
+    opacity: 0.92;
+}
+
+#panel-media .media-main {
+    position: relative;
+    z-index: 1;
+    display: block;
+    background: transparent;
+    object-fit: contain;
+}
+
+#panel-media .media-bg + .media-main {
+    filter: drop-shadow(0 18px 42px color-mix(in oklab, var(--color-neutral) 36%, transparent));
+}
+
+#panel-info {
+    grid-area: info;
+    overflow: hidden;
+}
+
+.signage-schedule {
+    height: 100%;
+    overflow: hidden;
+    padding: 1.5vh 2.5vw;
+}
+
+.upcoming-section {
+    margin-top: 1.4vh;
+}
+
+.qr-panel {
+    position: absolute;
+    z-index: 10;
+    bottom: 2vh;
+    left: 50%;
+    min-width: 9vw;
+    transform: translateX(-50%);
+}
+
+#qr-display {
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+#qr-display.qr-fading {
+    opacity: 0;
+}
+
+#qr-display canvas {
+    display: block;
+    border-radius: var(--radius-field);
+}
+
+#panel-ticker {
+    display: flex;
+    grid-area: ticker;
+    align-items: center;
+    height: 5.5vh;
+    overflow: hidden;
+}
+
+.ticker-track {
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.ticker-text {
+    padding-left: 100%;
+    color: var(--color-neutral-content);
+    font-size: 0.9vw;
+    font-weight: 500;
+    white-space: nowrap;
+    animation: ticker-scroll 30s linear infinite;
+}
+
+.pulse {
+    animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes ticker-scroll {
+    0% {
+        transform: translateX(0);
+    }
+
+    100% {
+        transform: translateX(-100%);
+    }
+}
+
+@keyframes pulse-dot {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.3;
+        transform: scale(1.5);
+    }
+}

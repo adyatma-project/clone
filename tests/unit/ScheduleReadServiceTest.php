@@ -1,0 +1,340 @@
+<?php
+
+use App\Libraries\Schedule\Contracts\ScheduleReadRepositoryInterface;
+use App\Libraries\Schedule\ScheduleReadService;
+use CodeIgniter\Test\CIUnitTestCase;
+
+/**
+ * @internal
+ */
+final class ScheduleReadServiceTest extends CIUnitTestCase
+{
+    private int $now;
+    private FakeScheduleReadRepository $repository;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->now = strtotime('2026-07-27 10:00:00');
+        $this->repository = new FakeScheduleReadRepository();
+        $this->repository->units = [
+            ['id' => 3, 'nama' => 'Komisi I'],
+            ['id' => 4, 'nama' => 'Bamus'],
+        ];
+    }
+
+    public function testPublicAgendaRequestsOnlyPublicSchedulesAndNormalizesOutput(): void
+    {
+        $this->repository->schedules = [$this->schedule([
+            'is_publik'       => 1,
+            'lokasi_lainnya' => 'Ruang Sidang Utama',
+        ])];
+        $this->repository->scheduleUnits = [
+            10 => [['id' => 3, 'nama' => 'Komisi I']],
+        ];
+
+        $result = $this->service()->publicAgenda([
+            'date'  => '2026-07-27',
+            'unit'  => '3',
+            'scope' => 'saya',
+        ]);
+
+        $this->assertTrue($this->repository->lastPublicOnly);
+        $this->assertSame('2026-07-27', $this->repository->lastDate);
+        $this->assertSame(3, $this->repository->lastUnitId);
+        $this->assertNull($this->repository->lastAllowedScheduleIds);
+        $this->assertSame('publik', $result['scope']);
+        $this->assertSame('Ruang Sidang Utama', $result['data'][0]['ruangan']);
+        $this->assertSame('Komisi I', $result['data'][0]['komisi']);
+        $this->assertTrue($result['data'][0]['is_public']);
+        $this->assertFalse($result['data'][0]['is_participant']);
+    }
+
+    public function testMemberAgendaScopeSayaRestrictsSchedulesByMembership(): void
+    {
+        $this->repository->memberScheduleIds = [10];
+        $this->repository->memberUnitIds = [3];
+        $this->repository->schedules = [$this->schedule(['is_publik' => 0])];
+        $this->repository->scheduleUnits = [
+            10 => [['id' => 3, 'nama' => 'Komisi I']],
+        ];
+
+        $result = $this->service()->memberAgenda(9, [
+            'month' => '2026-07',
+            'scope' => 'saya',
+        ]);
+
+        $this->assertFalse($this->repository->lastPublicOnly);
+        $this->assertSame('2026-07', $this->repository->lastMonth);
+        $this->assertSame([10], $this->repository->lastAllowedScheduleIds);
+        $this->assertSame('saya', $result['scope']);
+        $this->assertFalse($result['data'][0]['is_public']);
+        $this->assertTrue($result['data'][0]['is_participant']);
+    }
+
+    public function testMemberAgendaDefaultsUnknownScopeToPersonalSchedule(): void
+    {
+        $this->repository->memberScheduleIds = [10];
+        $this->repository->schedules = [];
+
+        $result = $this->service()->memberAgenda(9, [
+            'date'  => '2026-07-27',
+            'scope' => 'admin',
+        ]);
+
+        $this->assertSame('saya', $result['scope']);
+        $this->assertSame([10], $this->repository->lastAllowedScheduleIds);
+    }
+
+    public function testMemberPersonalScopeCanReturnRelatedBanmusAndGeneralSchedules(): void
+    {
+        $this->repository->memberScheduleIds = [-20, 10];
+        $this->repository->memberUnitIds = [3];
+        $this->repository->schedules = [
+            $this->schedule([
+                'id'        => -20,
+                'source_id' => 20,
+                'source'    => 'banmus',
+                'judul'     => 'Rapat Banmus anggota',
+            ]),
+            $this->schedule([
+                'id'        => 10,
+                'source_id' => 10,
+                'source'    => 'jadwal_umum',
+                'judul'     => 'Jadwal Umum anggota',
+            ]),
+        ];
+        $this->repository->scheduleUnits = [
+            -20 => [['id' => 3, 'nama' => 'Komisi I']],
+            10  => [['id' => 3, 'nama' => 'Komisi I']],
+        ];
+
+        $result = $this->service()->memberAgenda(9, [
+            'month' => '2026-07',
+            'scope' => 'saya',
+        ]);
+
+        $this->assertSame([-20, 10], $this->repository->lastAllowedScheduleIds);
+        $this->assertSame(
+            ['banmus', 'jadwal_umum'],
+            array_column($result['data'], 'source'),
+        );
+        $this->assertSame([true, true], array_column($result['data'], 'is_participant'));
+    }
+
+    public function testMemberScopeSemuaMergesTargetedAndPublicSchedulesWithoutDuplicates(): void
+    {
+        $this->repository->memberScheduleIds = [10];
+        $this->repository->memberUnitIds = [3];
+        $this->repository->schedules = [$this->schedule(['is_publik' => 0])];
+        $this->repository->publicSchedules = [
+            $this->schedule(['is_publik' => 1]),
+            $this->schedule(['id' => 11, 'judul' => 'Agenda publik lain', 'is_publik' => 1]),
+        ];
+        $this->repository->scheduleUnits = [
+            10 => [['id' => 3, 'nama' => 'Komisi I']],
+        ];
+
+        $result = $this->service()->memberAgenda(9, [
+            'date' => '2026-07-27',
+            'scope' => 'semua',
+        ]);
+
+        $this->assertCount(2, $result['data']);
+        $this->assertSame([10, 11], array_column($result['data'], 'id'));
+        $this->assertTrue($result['data'][0]['is_participant']);
+    }
+
+    public function testGeneralAllDayScheduleUsesGeneralLifecycle(): void
+    {
+        $this->repository->schedules = [$this->schedule([
+            'source' => 'jadwal_umum',
+            'waktu_mulai' => null,
+            'waktu_selesai' => null,
+        ])];
+
+        $result = $this->service()->publicAgenda(['date' => '2026-07-27']);
+
+        $this->assertSame('berlangsung', $result['data'][0]['status']);
+        $this->assertSame('', $result['data'][0]['waktu_mulai']);
+        $this->assertSame('', $result['data'][0]['waktu_selesai']);
+    }
+
+    public function testPublicDoesNotReceiveParticipantOnlyResourceUrl(): void
+    {
+        $this->repository->schedules = [$this->schedule([
+            'materi_akses' => 'peserta',
+        ])];
+
+        $result = $this->service()->publicAgenda(['date' => '2026-07-27']);
+
+        $this->assertFalse($result['data'][0]['has_materi']);
+        $this->assertNull($result['data'][0]['materi_access']);
+        $this->assertArrayNotHasKey('materi_url', $result['data'][0]);
+    }
+
+    public function testMemberParticipantReceivesParticipantResourceCapability(): void
+    {
+        $this->repository->memberUnitIds = [3];
+        $this->repository->schedules = [$this->schedule([
+            'is_publik'    => 0,
+            'materi_akses' => 'peserta',
+        ])];
+        $this->repository->scheduleUnits = [
+            10 => [['id' => 3, 'nama' => 'Komisi I']],
+        ];
+
+        $result = $this->service()->memberAgenda(9, [
+            'date'  => '2026-07-27',
+            'scope' => 'semua',
+        ]);
+
+        $this->assertTrue($result['data'][0]['has_materi']);
+        $this->assertSame('Peserta', $result['data'][0]['materi_access_label']);
+        $this->assertFalse($result['data'][0]['materi_restricted']);
+        $this->assertArrayNotHasKey('materi_url', $result['data'][0]);
+    }
+
+    public function testInvitationCapabilityIsOnlyExposedToAuthenticatedMembers(): void
+    {
+        $this->repository->schedules = [$this->schedule()];
+        $public = $this->service()->publicAgenda(['date' => '2026-07-27']);
+        $member = $this->service()->memberAgenda(9, ['date' => '2026-07-27', 'scope' => 'saya']);
+
+        $this->assertFalse($public['data'][0]['has_undangan']);
+        $this->assertTrue($member['data'][0]['has_undangan']);
+        $this->assertArrayNotHasKey('undangan_file', $member['data'][0]);
+        $this->assertArrayNotHasKey('undangan_nama_asli', $member['data'][0]);
+    }
+
+    public function testSignageContractRemainsBackwardCompatible(): void
+    {
+        $this->repository->schedules = [$this->schedule()];
+        $this->repository->upcoming = [$this->schedule([
+            'id'      => 11,
+            'tanggal' => '2026-07-28',
+        ])];
+
+        $result = $this->service()->signage('2026-07-27');
+
+        $this->assertSame(['date', 'jadwal', 'upcoming'], array_keys($result));
+        $this->assertSame(10, $result['jadwal'][0]['id']);
+        $this->assertSame(11, $result['upcoming'][0]['id']);
+        $this->assertSame('09:00', $result['jadwal'][0]['waktu_mulai']);
+        $this->assertSame('berlangsung', $result['jadwal'][0]['status']);
+    }
+
+    public function testFinishedScheduleMovedToFutureIsReportedAsWaiting(): void
+    {
+        $this->repository->schedules = [$this->schedule([
+            'tanggal' => '2026-07-28',
+            'status'  => 'selesai',
+        ])];
+
+        $result = $this->service()->publicAgenda([
+            'date' => '2026-07-28',
+        ]);
+
+        $this->assertSame('menunggu', $result['data'][0]['status']);
+    }
+
+    private function service(): ScheduleReadService
+    {
+        return new ScheduleReadService(
+            $this->repository,
+            fn (): int => $this->now,
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function schedule(array $overrides = []): array
+    {
+        return $overrides + [
+            'id'               => 10,
+            'source'           => 'banmus',
+            'judul'           => 'Rapat Komisi',
+            'keterangan'      => 'Pembahasan agenda',
+            'tanggal'         => '2026-07-27',
+            'waktu_mulai'     => '09:00:00',
+            'waktu_selesai'   => '11:00:00',
+            'status'          => 'menunggu',
+            'materi_url'      => 'https://example.com/materi',
+            'materi_akses'    => 'publik',
+            'stream_url'      => '',
+            'stream_akses'    => 'anggota',
+            'undangan_file'   => '0123456789012345678901234567890123456789.pdf',
+            'undangan_nama_asli' => 'Undangan Rapat.pdf',
+            'jenis'           => 'Rapat Kerja',
+            'is_publik'       => 1,
+            'lokasi_lainnya' => '',
+            'nama_ruangan'    => 'Ruang Rapat I',
+        ];
+    }
+}
+
+final class FakeScheduleReadRepository implements ScheduleReadRepositoryInterface
+{
+    /** @var list<array<string, mixed>> */
+    public array $schedules = [];
+    /** @var list<array<string, mixed>> */
+    public array $publicSchedules = [];
+    /** @var list<array<string, mixed>> */
+    public array $upcoming = [];
+    /** @var list<array{id: int, nama: string}> */
+    public array $units = [];
+    /** @var list<int> */
+    public array $memberUnitIds = [];
+    /** @var list<int> */
+    public array $memberScheduleIds = [];
+    /** @var array<int, list<array{id: int, nama: string}>> */
+    public array $scheduleUnits = [];
+    public bool $lastPublicOnly = false;
+    public ?string $lastDate = null;
+    public ?string $lastMonth = null;
+    public ?int $lastUnitId = null;
+    /** @var list<int>|null */
+    public ?array $lastAllowedScheduleIds = null;
+
+    public function findSchedules(
+        bool $publicOnly,
+        ?string $date,
+        ?string $month,
+        ?int $unitId,
+        ?array $allowedScheduleIds = null,
+    ): array {
+        $this->lastPublicOnly = $publicOnly;
+        $this->lastDate = $date;
+        $this->lastMonth = $month;
+        $this->lastUnitId = $unitId;
+        $this->lastAllowedScheduleIds = $allowedScheduleIds;
+
+        return $publicOnly && $this->publicSchedules !== []
+            ? $this->publicSchedules
+            : $this->schedules;
+    }
+
+    public function findUpcomingPublic(string $afterDate, int $limit): array
+    {
+        return array_slice($this->upcoming, 0, $limit);
+    }
+
+    public function findActiveUnits(): array
+    {
+        return $this->units;
+    }
+
+    public function findMemberUnitIds(int $memberId): array
+    {
+        return $this->memberUnitIds;
+    }
+
+    public function findScheduleIdsForMember(int $memberId): array
+    {
+        return $this->memberScheduleIds;
+    }
+
+    public function findUnitsByScheduleIds(array $scheduleIds): array
+    {
+        return array_intersect_key($this->scheduleUnits, array_flip($scheduleIds));
+    }
+}
